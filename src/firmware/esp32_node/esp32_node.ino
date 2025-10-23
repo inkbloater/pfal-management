@@ -7,10 +7,10 @@
 // ... other sensor/actuator libraries
 
 // WiFi & MQTT Config
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* mqtt_server = "YOUR_RASPBERRY_PI_IP";
-const char* node_id = "tier1_node"; // Unique ID for each ESP32
+const char* ssid = "Parikh";
+const char* password = "darkknight22";
+const char* mqtt_server = "192.168.1.46";
+const char* node_id = "esp32_tier1"; // Unique ID for each ESP32
 
 // Sensor & Actuator Pin Definitions
 #define BME_SCK 22
