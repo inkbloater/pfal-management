@@ -216,11 +216,11 @@ class RuleBasedController:
             
         return commands
 
-```
+"""```
 
 2.  **Update `src/pfal_controller/controller.py`** to handle humidity data.
 
-````python name=src/pfal_controller/controller.py
+```python name=src/pfal_controller/controller.py """
 """Main PFAL controller that orchestrates all components."""
 import logging
 import signal
