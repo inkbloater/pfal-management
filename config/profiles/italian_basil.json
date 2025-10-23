@@ -1,0 +1,15 @@
+{
+    "profile_name": "Italian_Basil",
+    "ph_target": 6.0,
+    "ph_tolerance": 0.3,
+    "ec_target": 1.6,
+    "ec_tolerance": 0.2,
+    "temp_min": 22.0,
+    "temp_max": 28.0,
+    "humidity_min": 50.0,
+    "humidity_max": 70.0,
+    "lights_on_hour": 5,
+    "lights_off_hour": 23,
+    "ph_pump_duration_ms": 1000,
+    "nutrient_pump_duration_ms": 2000
+}

@@ -1,0 +1,15 @@
+{
+    "profile_name": "Spinach",
+    "ph_target": 6.5,
+    "ph_tolerance": 0.5,
+    "ec_target": 2.0,
+    "ec_tolerance": 0.3,
+    "temp_min": 18.0,
+    "temp_max": 22.0,
+    "humidity_min": 60.0,
+    "humidity_max": 75.0,
+    "lights_on_hour": 6,
+    "lights_off_hour": 20,
+    "ph_pump_duration_ms": 1000,
+    "nutrient_pump_duration_ms": 2000
+}

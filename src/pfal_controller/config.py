@@ -1,5 +1,6 @@
 """Configuration module for PFAL Controller."""
 import os
+import json
 from dataclasses import dataclass
 from typing import Optional
 from dotenv import load_dotenv
@@ -39,13 +40,16 @@ class InfluxDBConfig:
 
 @dataclass
 class ControlConfig:
-    """Control thresholds and parameters."""
+    """Control thresholds and parameters loaded from a crop profile."""
+    profile_name: str
     ph_target: float
     ph_tolerance: float
     ec_target: float
     ec_tolerance: float
     temp_min: float
     temp_max: float
+    humidity_min: float
+    humidity_max: float
     lights_on_hour: int
     lights_off_hour: int
     ph_pump_duration_ms: int
@@ -62,7 +66,7 @@ class Config:
 
 def load_config(env_file: Optional[str] = None) -> Config:
     """
-    Load configuration from environment variables.
+    Load configuration from environment variables and a crop profile JSON file.
     
     Args:
         env_file: Path to .env file (optional)
@@ -98,19 +102,21 @@ def load_config(env_file: Optional[str] = None) -> Config:
         org=os.getenv('INFLUXDB_ORG', 'pfal'),
         bucket=os.getenv('INFLUXDB_BUCKET', 'pfal_sensors'),
     )
-    
-    control_config = ControlConfig(
-        ph_target=float(os.getenv('PH_TARGET', '6.0')),
-        ph_tolerance=float(os.getenv('PH_TOLERANCE', '0.3')),
-        ec_target=float(os.getenv('EC_TARGET', '1.5')),
-        ec_tolerance=float(os.getenv('EC_TOLERANCE', '0.2')),
-        temp_min=float(os.getenv('TEMP_MIN', '20.0')),
-        temp_max=float(os.getenv('TEMP_MAX', '28.0')),
-        lights_on_hour=int(os.getenv('LIGHTS_ON_HOUR', '6')),
-        lights_off_hour=int(os.getenv('LIGHTS_OFF_HOUR', '22')),
-        ph_pump_duration_ms=int(os.getenv('PH_PUMP_DURATION_MS', '1000')),
-        nutrient_pump_duration_ms=int(os.getenv('NUTRIENT_PUMP_DURATION_MS', '2000')),
+
+    # Load control config from crop profile
+    profile_name = os.getenv('CROP_PROFILE', 'default')
+    profile_path = os.path.join(
+        os.path.dirname(__file__), '..', '..', 'config', 'profiles', f'{profile_name}.json'
     )
+
+    if not os.path.exists(profile_path):
+        raise FileNotFoundError(f"Crop profile not found at: {profile_path}")
+
+    with open(profile_path, 'r') as f:
+        profile_data = json.load(f)
+
+    # Create ControlConfig from the loaded JSON data
+    control_config = ControlConfig(**profile_data)
     
     return Config(
         mqtt=mqtt_config,
