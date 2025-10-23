@@ -165,6 +165,40 @@ Actuator command message (JSON):
 }
 ```
 
+## Running an MQTT broker locally (for development)
+
+If you don't have a broker available, a lightweight Mosquitto broker is included via Docker Compose. This is handy for local testing with the example ESP32 simulator in `examples/`.
+
+Start the broker:
+
+```bash
+docker compose up -d mqtt
+```
+
+Stop the broker:
+
+```bash
+docker compose down
+```
+
+Quick test (requires `mosquitto-clients` or `mosquitto_pub/mosquitto_sub`):
+
+Open a subscriber in one terminal:
+
+```bash
+mosquitto_sub -h localhost -t 'pfal/sensors/ph' -v
+```
+
+Publish a test message in another terminal:
+
+```bash
+mosquitto_pub -h localhost -t 'pfal/sensors/ph' -m '{"value":6.5,"sensor_id":"sim_1"}'
+```
+
+Notes:
+- The broker binds to port 1883 on the host. If you run inside Docker Toolbox or a remote VM, update `MQTT_BROKER` in your `.env` accordingly.
+- `config/config.example.env` documents the environment variable names used by `src/pfal_controller/config.py`.
+
 ## InfluxDB Data Structure
 
 All sensor readings are stored in InfluxDB with the following structure:
