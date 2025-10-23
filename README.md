@@ -1,30 +1,20 @@
 # PFAL Management System
 
-Manages the automation of PFAL (Plant Factory with Artificial Lighting). This system provides rule-based control for monitoring and automating environmental conditions in a plant factory.
+Manages the automation of PFAL (Plant Factory with Artificial Lighting). This system provides a flexible, rule-based controller for monitoring and automating environmental conditions in a plant factory.
 
-## Phase 1: Rule-Based Controller
+## Features
 
 The current implementation provides a Raspberry Pi-based controller that:
 
-- **Subscribes to MQTT topics** from ESP32 sensor nodes for:
-  - pH sensors
-  - EC (Electrical Conductivity) sensors
-  - Temperature sensors
-  - BME280 environmental sensors (temperature, humidity, pressure)
-
-- **Implements IF-THEN control logic** for:
+- **Dynamic Crop Profiles**: Loads control setpoints from JSON-based crop profiles, allowing for easy switching between different plant requirements (e.g., spinach, basil).
+- **Rule-Based Control**: Implements IF-THEN control logic for:
   - pH adjustment via peristaltic pump
-  - Nutrient dosing via peristaltic pump
+  - Nutrient (EC) dosing via peristaltic pump
   - Temperature control via fans
-  - Lighting control based on schedule
-
-- **Persists sensor data** to InfluxDB 2 for historical analysis and monitoring
-
-- **Publishes MQTT commands** to control actuators:
-  - Peristaltic pumps (pH and nutrient dosing)
-  - Main water pump
-  - Grow lights
-  - Ventilation fans
+  - Humidity control via fans
+  - Lighting control based on a daily schedule
+- **Data Persistence**: Persists all sensor data to InfluxDB 2 for historical analysis and monitoring.
+- **MQTT Communication**: Subscribes to sensor topics and publishes commands to actuators using the standard MQTT protocol.
 
 ## Architecture
 
@@ -44,23 +34,67 @@ ESP32 Sensors → MQTT Topics → Raspberry Pi Controller → MQTT Commands → 
 
 ### Install Dependencies
 
+For production/deployment:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Configuration
-
-1. Copy the example configuration file:
+For development and running tests:
 ```bash
-cp config/config.example.env .env
+pip install -r requirements-dev.txt
 ```
 
-2. Edit `.env` with your settings:
-   - MQTT broker address and credentials
-   - InfluxDB URL and authentication token
-   - Control thresholds (pH, EC, temperature)
-   - Lighting schedule
-   - Pump durations
+## Configuration
+
+The system now uses a combination of a `.env` file for core settings and JSON files for crop-specific setpoints.
+
+### 1. Create Crop Profiles
+
+Create a JSON file for each crop you want to grow in the `config/profiles/` directory.
+
+Example: `config/profiles/basil.json`
+```json
+{
+    "profile_name": "Basil",
+    "ph_target": 6.0,
+    "ph_tolerance": 0.3,
+    "ec_target": 1.6,
+    "ec_tolerance": 0.2,
+    "temp_min": 22.0,
+    "temp_max": 28.0,
+    "humidity_min": 50.0,
+    "humidity_max": 70.0,
+    "lights_on_hour": 5,
+    "lights_off_hour": 23,
+    "ph_pump_duration_ms": 1000,
+    "nutrient_pump_duration_ms": 2000
+}
+```
+
+### 2. Configure the Environment
+
+1.  Copy the example configuration file:
+    ```bash
+    cp config/config.example.env .env
+    ```
+
+2.  Edit `.env` with your settings. The most important change is setting the `CROP_PROFILE`.
+
+    ```dotenv
+    # PFAL Crop Profile
+    # The name of the JSON file in `config/profiles/` to use (without .json extension).
+    CROP_PROFILE=basil
+
+    # MQTT Configuration
+    MQTT_BROKER=localhost
+    MQTT_PORT=1883
+    # ... other settings
+
+    # InfluxDB 2 Configuration
+    INFLUXDB_URL=http://localhost:8086
+    INFLUXDB_TOKEN=your-influxdb-token
+    # ... other settings
+    ```
 
 ## Usage
 
@@ -70,185 +104,119 @@ cp config/config.example.env .env
 python main.py
 ```
 
-Or with a custom configuration file:
+Or with a custom environment file:
 
 ```bash
-python main.py --config /path/to/config.env
+python main.py --config /path/to/custom.env
 ```
 
 ### Run as a Service (systemd)
 
-Create a systemd service file at `/etc/systemd/system/pfal-controller.service`:
-
-```ini
-[Unit]
-Description=PFAL Controller
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/pfal-management
-ExecStart=/usr/bin/python3 /home/pi/pfal-management/main.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start the service:
-
+A `config/pfal-controller.service` file is provided. To install:
 ```bash
+sudo cp config/pfal-controller.service /etc/systemd/system/
 sudo systemctl enable pfal-controller
 sudo systemctl start pfal-controller
 sudo systemctl status pfal-controller
 ```
 
+## Development & Testing
+
+### Sensor Simulator
+For local testing without hardware, you can run the ESP32 sensor simulator. It will publish random sensor data to the MQTT broker.
+
+```bash
+python examples/esp32_sensor_simulator.py
+```
+
+### Unit Tests
+The project includes unit tests for the control logic. To run them, first install development dependencies (`pip install -r requirements-dev.txt`), then run `pytest`.
+
+```bash
+pytest
+```
+
 ## Control Rules
 
-### pH Control
-- **IF** pH < (target - tolerance) **THEN** activate pH up pump for configured duration
-- **IF** pH > (target + tolerance) **THEN** log warning (pH down control can be added)
+- **pH Control**: Activates pH pump if `pH < (target - tolerance)`.
+- **EC (Nutrient) Control**: Activates nutrient pump if `EC < (target - tolerance)`.
+- **Temperature Control**: Activates fans if `temperature > max_threshold`.
+- **Humidity Control**: Activates fans if `humidity > max_threshold`.
+- **Fan Deactivation**: Fans are turned OFF only if **both** temperature and humidity are within their normal ranges (including hysteresis).
+- **Lighting Control**: Lights are turned ON/OFF based on the `lights_on_hour` and `lights_off_hour` schedule.
 
-### EC (Nutrient) Control
-- **IF** EC < (target - tolerance) **THEN** activate nutrient pump for configured duration
+## MQTT Topics & Message Format
 
-### Temperature Control
-- **IF** temperature > max threshold **THEN** turn fans ON
-- **IF** temperature < (max - 2°C) **THEN** turn fans OFF (with hysteresis)
-
-### Lighting Control
-- **IF** current hour is within schedule **THEN** lights ON
-- **ELSE** lights OFF
-
-## MQTT Topics
+These have not changed. Sensor data is expected on `pfal/sensors/*` and commands are published to `pfal/actuators/*`. See the original documentation below for formats.
 
 ### Sensor Topics (Subscribed)
-- `pfal/sensors/ph` - pH sensor readings
-- `pfal/sensors/ec` - EC sensor readings
-- `pfal/sensors/temperature` - Temperature readings
-- `pfal/sensors/bme280` - BME280 sensor data (temp, humidity, pressure)
+- `pfal/sensors/ph`
+- `pfal/sensors/ec`
+- `pfal/sensors/temperature`
+- `pfal/sensors/bme280`
 
 ### Actuator Topics (Published)
-- `pfal/actuators/ph_pump` - pH adjustment pump commands
-- `pfal/actuators/nutrient_pump` - Nutrient dosing pump commands
-- `pfal/actuators/main_pump` - Main water pump commands
-- `pfal/actuators/lights` - Grow light commands
-- `pfal/actuators/fans` - Ventilation fan commands
+- `pfal/actuators/ph_pump`
+- `pfal/actuators/nutrient_pump`
+- `pfal/actuators/main_pump`
+- `pfal/actuators/lights`
+- `pfal/actuators/fans`
 
 ### Message Format
-
 Sensor messages (JSON):
-```json
-{
-  "value": 6.5,
-  "sensor_id": "esp32_1"
-}
-```
+`{ "value": 6.5, "sensor_id": "esp32_1" }`
 
 BME280 sensor message (JSON):
-```json
-{
-  "temperature": 24.5,
-  "humidity": 65.0,
-  "pressure": 1013.25,
-  "sensor_id": "esp32_1"
-}
-```
+`{ "temperature": 24.5, "humidity": 65.0, "pressure": 1013.25, "sensor_id": "esp32_1" }`
 
 Actuator command message (JSON):
-```json
-{
-  "command": "ON",
-  "duration_ms": 1000
-}
-```
+`{ "command": "ON", "duration_ms": 1000 }`
 
-## Running an MQTT broker locally (for development)
+## ESP32 Firmware
 
-If you don't have a broker available, a lightweight Mosquitto broker is included via Docker Compose. This is handy for local testing with the example ESP32 simulator in `examples/`.
-
-Start the broker:
-
-```bash
-docker compose up -d mqtt
-```
-
-Stop the broker:
-
-```bash
-docker compose down
-```
-
-Quick test (requires `mosquitto-clients` or `mosquitto_pub/mosquitto_sub`):
-
-Open a subscriber in one terminal:
-
-```bash
-mosquitto_sub -h localhost -t 'pfal/sensors/ph' -v
-```
-
-Publish a test message in another terminal:
-
-```bash
-mosquitto_pub -h localhost -t 'pfal/sensors/ph' -m '{"value":6.5,"sensor_id":"sim_1"}'
-```
-
-Notes:
-- The broker binds to port 1883 on the host. If you run inside Docker Toolbox or a remote VM, update `MQTT_BROKER` in your `.env` accordingly.
-- `config/config.example.env` documents the environment variable names used by `src/pfal_controller/config.py`.
-
-## InfluxDB Data Structure
-
-All sensor readings are stored in InfluxDB with the following structure:
-
-**Measurements:**
-- `ph` - pH readings
-- `ec` - EC readings
-- `temperature` - Temperature readings
-- `bme280` - BME280 sensor readings
-
-**Tags:**
-- `sensor_id` - Identifier for the sensor
-
-**Fields:**
-- `value` - Sensor reading value
-- For BME280: `temperature`, `humidity`, `pressure`
+A reference firmware implementation for an ESP32 node is located at `src/firmware/esp32_node/esp32_node.ino`. This can be used as a starting point for developing the code for your physical hardware.
 
 ## Project Structure
 
 ```
 pfal-management/
+├── config/
+│   ├── profiles/
+│   │   ├── basil.json         # Example crop profile
+│   │   └── spinach.json       # Example crop profile
+│   ├── config.example.env     # Example configuration file
+│   └── ...
+├── examples/
+│   └── esp32_sensor_simulator.py
 ├── src/
+│   ├── firmware/
+│   │   └── esp32_node/
+│   │       └── esp32_node.ino   # Reference ESP32 firmware
 │   └── pfal_controller/
 │       ├── __init__.py
-│       ├── config.py              # Configuration management
-│       ├── controller.py          # Main controller orchestration
+│       ├── config.py          # Configuration management
+│       ├── controller.py      # Main controller orchestration
 │       ├── influxdb_persistence.py # InfluxDB data persistence
-│       ├── mqtt_client.py         # MQTT communication
-│       └── rule_controller.py     # Rule-based control logic
-├── config/
-│   └── config.example.env         # Example configuration file
-├── main.py                        # Main entry point
-├── requirements.txt               # Python dependencies
-└── README.md                      # This file
+│       ├── mqtt_client.py     # MQTT communication
+│       └── rule_controller.py # Rule-based control logic
+├── tests/
+│   └── test_rule_controller.py  # Unit tests for control logic
+├── main.py                    # Main entry point
+├── requirements.txt           # Python dependencies
+├── requirements-dev.txt       # Development/testing dependencies
+└── README.md                  # This file
 ```
 
 ## Future Enhancements
 
 Phase 2 and beyond will include:
 - Machine learning-based predictive control
-- Supply chain management
-- Logistics tracking
-- Accounting integration
-- Web-based monitoring dashboard
-- Mobile app integration
+- A web-based dashboard for live monitoring and profile management
 - Advanced analytics and reporting
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see LICENSE file for details.
 
 ## Contributing
 
